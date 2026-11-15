@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isConfigured } from "@/lib/env";
 import { DealSheet, Flash, Loading } from "@/components/ui";
 import { joinWaitlist } from "@/app/actions/investor";
@@ -9,9 +9,10 @@ import type { Project } from "@/lib/types";
 
 async function loadDeals(): Promise<{ open: Project[]; past: Project[] }> {
   await cookies(); // always render deals at request time
-  if (!isConfigured()) return { open: [], past: [] };
-  const supabase = await createClient();
-  const { data } = await supabase
+  // The hyfin schema is closed to anonymous API access, so published deals are
+  // read on the server with the service key. Drafts are never selected.
+  if (!isConfigured() || !process.env.SUPABASE_SECRET_KEY) return { open: [], past: [] };
+  const { data } = await createAdminClient()
     .from("projects")
     .select("*")
     .in("status", ["open", "funded", "repaid", "defaulted"])

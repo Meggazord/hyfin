@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
 import { checkEligibility } from "@/lib/eligibility";
 import { subscribe } from "@/app/actions/investor";
@@ -122,8 +123,14 @@ async function SubscribeBox({ project }: { project: Project }) {
 
 async function Deal({ params, searchParams }: PageProps<"/projects/[slug]">) {
   const { slug } = await params;
-  const supabase = await createClient();
-  const { data } = await supabase.from("projects").select("*").eq("slug", slug).maybeSingle();
+  // Read with the service key (the schema is closed to anonymous access); never show drafts.
+  if (!process.env.SUPABASE_SECRET_KEY) notFound();
+  const { data } = await createAdminClient()
+    .from("projects")
+    .select("*")
+    .eq("slug", slug)
+    .neq("status", "draft")
+    .maybeSingle();
   if (!data) notFound();
   const p = data as Project;
 
