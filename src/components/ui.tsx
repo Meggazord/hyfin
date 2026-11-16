@@ -99,7 +99,15 @@ export function DealSheet({ project, link = true }: { project: Project; link?: b
         <ProjectBadge status={p.status} />
       </div>
       <div className="px-6 pb-5 pt-3">
-        <h3 className="text-xl font-bold leading-snug">{p.title}</h3>
+        <h3 className="text-xl font-bold leading-snug">
+          {link ? (
+            <Link href={`/projects/${p.slug}`} className="hover:text-teal-dark hover:underline">
+              {p.title}
+            </Link>
+          ) : (
+            p.title
+          )}
+        </h3>
         <p className="mt-2 text-sm leading-relaxed text-muted">{p.summary}</p>
       </div>
       <div className="grid grid-cols-2 border-y border-line">
