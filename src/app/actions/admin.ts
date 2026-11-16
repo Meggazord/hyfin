@@ -57,6 +57,56 @@ export async function createProject(formData: FormData) {
   redirect(`/admin/projects/${data.id}`);
 }
 
+export async function updateProject(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const editPath = `/admin/projects/${id}/edit`;
+  const db = createAdminClient();
+  const { data: existing } = await db.from("projects").select("*").eq("id", id).maybeSingle();
+  if (!existing) return go("/admin", "error", "Deal not found.");
+  const p = existing as Project;
+  const { count } = await db
+    .from("investments")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", id)
+    .not("status", "in", "(expired,refunded)");
+  const lockTerms = (count ?? 0) > 0 || !["draft", "open"].includes(p.status);
+  const lockDates = !["draft", "open"].includes(p.status);
+
+  // Locked fields are disabled in the form, so take them from the saved deal.
+  const raw: Record<string, unknown> = Object.fromEntries(formData);
+  if (lockTerms) {
+    Object.assign(raw, {
+      target_amount: p.target_amount,
+      min_ticket: p.min_ticket,
+      max_ticket: p.max_ticket ?? "",
+      return_pct: p.return_pct,
+      term_days: p.term_days,
+      opens_at: p.opens_at,
+    });
+  }
+  if (lockDates) Object.assign(raw, { opens_at: p.opens_at, closes_at: p.closes_at });
+
+  const parsed = ProjectForm.safeParse(raw);
+  if (!parsed.success) return go(editPath, "error", parsed.error.issues[0].message);
+  const v = parsed.data;
+  if (lockTerms && !lockDates && new Date(v.closes_at) < new Date(p.closes_at)) {
+    return go(editPath, "error", "Investors have subscribed, so the closing date can only be extended, not brought forward.");
+  }
+
+  const { error } = await db
+    .from("projects")
+    .update({
+      ...v,
+      opens_at: new Date(v.opens_at).toISOString(),
+      closes_at: new Date(v.closes_at).toISOString(),
+      related_party: lockTerms ? p.related_party : formData.get("related_party") === "on",
+    })
+    .eq("id", id);
+  if (error) return go(editPath, "error", error.message);
+  go(`/admin/projects/${id}`, "notice", "Deal updated.");
+}
+
 export async function publishProject(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id"));

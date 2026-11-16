@@ -64,7 +64,12 @@ async function Content({ params, searchParams }: PageProps<"/admin/projects/[id]
       <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <DealSheet project={p} link={false} />
         <div className="space-y-4">
-          <h2 className="text-xl font-bold tracking-tight">Next step</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold tracking-tight">Next step</h2>
+            <Link href={`/admin/projects/${p.id}/edit`} className="btn btn-quiet btn-sm">
+              Edit deal
+            </Link>
+          </div>
           {p.status === "draft" && (
             <>
               <p className="text-sm text-muted">
