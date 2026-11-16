@@ -23,6 +23,11 @@ export default function Login({ searchParams }: PageProps<"/login">) {
           <input className="field" id="password" name="password" type="password" autoComplete="current-password" required />
         </div>
         <button className="btn w-full">Sign in</button>
+        <p className="text-sm">
+          <Link href="/forgot-password" className="underline">
+            Forgot your password?
+          </Link>
+        </p>
         <p className="text-sm text-muted">
           New to HyFin?{" "}
           <Link href="/signup" className="underline">

@@ -41,6 +41,34 @@ export async function signIn(formData: FormData) {
   redirect("/dashboard");
 }
 
+export async function requestPasswordReset(formData: FormData) {
+  const email = z.string().trim().email().safeParse(formData.get("email"));
+  if (!email.success) return back("/forgot-password", "Enter a valid email address.");
+  const supabase = await createClient();
+  await supabase.auth.resetPasswordForEmail(email.data, {
+    redirectTo: `${siteUrl()}/auth/callback?next=/reset-password`,
+  });
+  // Same message either way, so the form can't be used to check who has an account.
+  redirect(
+    "/login?notice=" +
+      encodeURIComponent("If that email has an account, we sent a link to set a new password. Open it in this browser."),
+  );
+}
+
+export async function updatePassword(formData: FormData) {
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 10) return back("/reset-password", "Use a password of at least 10 characters.");
+  if (password !== String(formData.get("confirm") ?? "")) return back("/reset-password", "The two passwords don't match.");
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return back("/forgot-password", "That reset link has expired. Ask for a new one.");
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return back("/reset-password", error.message);
+  redirect("/dashboard?notice=" + encodeURIComponent("Password updated."));
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
