@@ -17,6 +17,24 @@ export function deriveDepositAddress(index: number, xpub = env("DEPOSIT_XPUB")):
   return node.deriveChild(index).address;
 }
 
+export type DepositMode = "safe" | "xpub" | "off";
+
+/**
+ * "safe": every investor pays one Safe multisig on Base, matched by a unique amount.
+ * "xpub": one derived address per investor (needs DEPOSIT_XPUB).
+ */
+export function depositMode(): DepositMode {
+  if (process.env.DEPOSIT_SAFE_ADDRESS) return "safe";
+  if (process.env.DEPOSIT_XPUB) return "xpub";
+  return "off";
+}
+
+export function safeAddress(): string {
+  const a = normaliseAddress(env("DEPOSIT_SAFE_ADDRESS"));
+  if (!a) throw new Error("DEPOSIT_SAFE_ADDRESS is not a valid address.");
+  return a;
+}
+
 export function normaliseAddress(input: string): string | null {
   const v = input.trim();
   if (!isAddress(v)) return null;

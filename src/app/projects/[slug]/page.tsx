@@ -56,7 +56,7 @@ async function SubscribeBox({ project }: { project: Project }) {
         <h2 className="text-lg font-bold">You are subscribed for {usd(inv.committed_amount)}</h2>
         <p className="mt-2 text-sm text-muted">Received so far: {usd(inv.received_amount, 2)}.</p>
         <Link href={`/dashboard/investments/${inv.id}`} className="btn mt-4">
-          View deposit address
+          View payment details
         </Link>
       </div>
     );
@@ -115,7 +115,7 @@ async function SubscribeBox({ project }: { project: Project }) {
           {pct(p.return_pct)} return is a target the borrower has agreed to pay, not a guarantee.
         </span>
       </label>
-      <button className="btn w-full">Get my deposit address</button>
+      <button className="btn w-full">Reserve and get payment details</button>
       <p className="hint">Next you will see the address to send USDC or USDT to. Nothing is charged until you send.</p>
     </form>
   );

@@ -1,7 +1,9 @@
 import "server-only";
 import { JsonRpcProvider, Network, formatUnits, getAddress, id as keccakId, zeroPadValue } from "ethers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { enabledChains } from "@/lib/chains";
+import { enabledChains, rpcUrl } from "@/lib/chains";
+import { depositMode, safeAddress } from "@/lib/wallet";
+import { matchTransfer, type MatchCandidate } from "@/lib/match";
 import { sendEmail } from "@/lib/notify";
 import { usd } from "@/lib/format";
 
@@ -34,28 +36,56 @@ export async function scanDeposits(): Promise<ScanReport> {
   const projectIds = (live ?? []).map((p) => p.id);
   if (projectIds.length === 0) return report;
 
+  const mode = depositMode();
+  if (mode === "off") return report;
+
   const { data: invs, error: invErr } = await db
     .from("investments")
-    .select("id, deposit_address, profiles(email), projects(title)")
+    .select("id, status, created_at, expected_amount, deposit_address, profiles(email, payout_address), projects(title)")
     .in("project_id", projectIds)
-    .not("deposit_address", "is", null);
+    .not("status", "in", "(expired,refunded)");
   if (invErr) throw invErr;
 
-  const byAddress = new Map<string, { id: string; email?: string; title?: string }>();
+  type Info = { id: string; email?: string; title?: string };
+  const info = new Map<string, Info>();
+  const byAddress = new Map<string, Info>();
+  const candidates: MatchCandidate[] = [];
   for (const i of invs ?? []) {
-    const profile = i.profiles as unknown as { email: string } | null;
+    const profile = i.profiles as unknown as { email: string; payout_address: string | null } | null;
     const project = i.projects as unknown as { title: string } | null;
-    byAddress.set(i.deposit_address!.toLowerCase(), { id: i.id, email: profile?.email, title: project?.title });
+    const row = { id: i.id, email: profile?.email, title: project?.title };
+    info.set(i.id, row);
+    if (i.deposit_address) byAddress.set(i.deposit_address.toLowerCase(), row);
+    candidates.push({
+      id: i.id,
+      status: i.status,
+      created_at: i.created_at,
+      expected_amount: i.expected_amount,
+      payout_address: profile?.payout_address ?? null,
+    });
   }
-  const watched = [...byAddress.keys()];
+  const safe = mode === "safe" ? safeAddress().toLowerCase() : null;
+  const watched = safe ? [safe] : [...byAddress.keys()];
   if (watched.length === 0) return report;
+
+  /** Which subscription a transfer belongs to, or null if nobody can be identified. */
+  const resolve = (t: { to: string; from: string; amount: string }): Info | null => {
+    if (!safe) return byAddress.get(t.to.toLowerCase()) ?? null;
+    if (t.to.toLowerCase() !== safe) return null;
+    const id = matchTransfer(t, candidates);
+    if (!id) return null;
+    // Keep candidates current so a second transfer in the same run matches correctly.
+    const c = candidates.find((x) => x.id === id);
+    if (c && c.status === "awaiting_deposit") c.status = "partially_funded";
+    return info.get(id) ?? null;
+  };
 
   const chunkSize = num(process.env.SCAN_BLOCK_CHUNK, 2000);
   const maxChunks = num(process.env.SCAN_MAX_CHUNKS, 20);
   const lookback = num(process.env.SCAN_INITIAL_LOOKBACK, 5000);
 
   for (const chain of enabledChains()) {
-    const provider = new JsonRpcProvider(process.env[chain.rpcEnv], chain.id, {
+    const provider = new JsonRpcProvider(rpcUrl(chain), chain.id, {
       staticNetwork: Network.from(chain.id),
     });
     const safeHead = (await provider.getBlockNumber()) - chain.confirmations;
@@ -83,8 +113,27 @@ export async function scanDeposits(): Promise<ScanReport> {
           });
           for (const log of logs) {
             const t = decodeTransfer(log, token.decimals);
-            const inv = byAddress.get(t.to.toLowerCase());
-            if (!inv || Number(t.amount) <= 0) continue;
+            if (Number(t.amount) <= 0) continue;
+            const inv = resolve(t);
+            if (!inv) {
+              if (safe) {
+                // Money arrived but we can't tell whose it is: park it for an admin to assign.
+                const { error: uErr } = await db.from("unmatched_deposits").upsert(
+                  {
+                    chain_id: chain.id,
+                    token: token.symbol,
+                    tx_hash: log.transactionHash.toLowerCase(),
+                    log_index: log.index,
+                    from_address: t.from.toLowerCase(),
+                    amount: t.amount,
+                    block_number: log.blockNumber,
+                  },
+                  { onConflict: "chain_id,tx_hash,log_index", ignoreDuplicates: true },
+                );
+                if (uErr) throw uErr;
+              }
+              continue;
+            }
             const { data: isNew, error } = await db.rpc("record_deposit", {
               p_investment: inv.id,
               p_chain: chain.id,

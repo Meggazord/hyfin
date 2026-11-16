@@ -6,7 +6,8 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkEligibility } from "@/lib/eligibility";
-import { deriveDepositAddress, normaliseAddress } from "@/lib/wallet";
+import { depositMode, deriveDepositAddress, normaliseAddress, safeAddress } from "@/lib/wallet";
+import { pickExpectedAmount } from "@/lib/match";
 import type { Investment } from "@/lib/types";
 
 const withError = (path: string, message: string): never =>
@@ -33,6 +34,12 @@ export async function subscribe(formData: FormData) {
   if (!eligible.ok) return withError(path, eligible.reason);
   if (formData.get("confirm_risk") !== "on") return withError(path, "Confirm that you understand you can lose this money.");
   if (!Number.isFinite(amount) || amount <= 0) return withError(path, "Enter the amount you want to invest.");
+  const mode = depositMode();
+  if (mode === "off") return withError(path, "Deposits are not open yet. Nothing was reserved.");
+  // Safe deposits are matched to investors partly by the sending wallet, and we repay to it.
+  if (mode === "safe" && !profile.payout_address) {
+    return withError("/dashboard/profile", "Add the wallet you'll pay from (and want to be repaid to) before investing.");
+  }
 
   const db = createAdminClient();
   const { data, error } = await db.rpc("reserve_investment", {
@@ -46,17 +53,44 @@ export async function subscribe(formData: FormData) {
   }
   const inv = data as Investment;
 
+  const expire = () => db.from("investments").update({ status: "expired" }).eq("id", inv.id);
+
+  if (mode === "safe") {
+    // Give this subscription an amount nobody else is currently asked to send, e.g. 1,500.37.
+    let saved = false;
+    for (let attempt = 0; attempt < 5 && !saved; attempt++) {
+      const { data: live } = await db
+        .from("investments")
+        .select("expected_amount")
+        .in("status", ["awaiting_deposit", "partially_funded"])
+        .not("expected_amount", "is", null);
+      const taken = new Set((live ?? []).map((r) => Math.round(Number(r.expected_amount) * 100)));
+      const expected = pickExpectedAmount(Number(inv.committed_amount), taken);
+      if (expected == null) break;
+      const { error: e } = await db
+        .from("investments")
+        .update({ expected_amount: expected, deposit_address: safeAddress() })
+        .eq("id", inv.id);
+      saved = !e;
+    }
+    if (!saved) {
+      await expire();
+      return withError(path, "Could not prepare your deposit. Nothing was charged. Try a slightly different amount.");
+    }
+    redirect(`/dashboard/investments/${inv.id}`);
+  }
+
   let address: string;
   try {
     address = deriveDepositAddress(Number(inv.deposit_index));
   } catch {
     // Never leave a reservation without an address the investor could pay into.
-    await db.from("investments").update({ status: "expired" }).eq("id", inv.id);
+    await expire();
     return withError(path, "Deposits are not available right now. Nothing was charged. Try again later.");
   }
   const { error: updErr } = await db.from("investments").update({ deposit_address: address }).eq("id", inv.id);
   if (updErr) {
-    await db.from("investments").update({ status: "expired" }).eq("id", inv.id);
+    await expire();
     return withError(path, "Could not create your deposit address. Try again.");
   }
   redirect(`/dashboard/investments/${inv.id}`);

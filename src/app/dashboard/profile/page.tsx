@@ -42,7 +42,7 @@ async function Content({ searchParams }: PageProps<"/dashboard/profile">) {
         </div>
         <div>
           <label className="label" htmlFor="payout_address">
-            Payout wallet address
+            Your wallet (you pay from it, we repay to it)
           </label>
           <input
             className="field"
@@ -53,8 +53,8 @@ async function Content({ searchParams }: PageProps<"/dashboard/profile">) {
             spellCheck={false}
           />
           <p className="hint">
-            Repayments are sent here in USDC or USDT. Use a wallet you control on Base, Arbitrum or Ethereum. Do not
-            use an exchange deposit address unless the exchange confirms it accepts that token on that network.
+            Use a wallet you control on Base, such as MetaMask, Rabby or Coinbase Wallet. We use it to recognise your
+            deposit and send your repayment in USDC. Do not use an exchange deposit address.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm">

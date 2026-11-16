@@ -218,3 +218,35 @@ export async function reviewInvestor(formData: FormData) {
   if (error) return go("/admin/investors", "error", error.message);
   go("/admin/investors", "notice", "Investor updated.");
 }
+
+/** Credits a Safe deposit the scanner couldn't match to the subscription an admin picks. */
+export async function assignDeposit(formData: FormData) {
+  await requireAdmin();
+  const depositId = String(formData.get("deposit_id") ?? "");
+  const investmentId = String(formData.get("investment_id") ?? "");
+  if (!investmentId) return go("/admin", "error", "Pick the subscription this payment belongs to.");
+  const db = createAdminClient();
+  const { data: d } = await db
+    .from("unmatched_deposits")
+    .select("*")
+    .eq("id", depositId)
+    .is("assigned_investment", null)
+    .maybeSingle();
+  if (!d) return go("/admin", "error", "That payment is already assigned or no longer exists.");
+  const { error } = await db.rpc("record_deposit", {
+    p_investment: investmentId,
+    p_chain: d.chain_id,
+    p_token: d.token,
+    p_tx: d.tx_hash,
+    p_log_index: d.log_index,
+    p_from: d.from_address,
+    p_amount: d.amount,
+    p_block: d.block_number,
+  });
+  if (error) return go("/admin", "error", "Could not credit that payment. Check the subscription is still live.");
+  await db
+    .from("unmatched_deposits")
+    .update({ assigned_investment: investmentId, assigned_at: new Date().toISOString() })
+    .eq("id", depositId);
+  go("/admin", "notice", "Payment credited.");
+}

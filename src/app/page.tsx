@@ -79,7 +79,7 @@ const STEPS = [
   },
   {
     title: "You fund it in USDC or USDT",
-    body: "Subscribe for an amount and you get a deposit address that belongs to your subscription only. Your deposit shows up in your account once the network confirms it.",
+    body: "Subscribe for an amount and you get an exact USDC amount to send on Base. The cents identify your payment, and it shows up in your account once the network confirms it.",
   },
   {
     title: "The money pays the supplier",
@@ -165,7 +165,7 @@ export default function Home({ searchParams }: PageProps<"/">) {
               <li>Each deal is tied to one named purchase order, not a pool.</li>
               <li>The deal page states the borrower, the use of funds and any collateral.</li>
               <li>Every deposit and every repayment is an on-chain transaction you can look up.</li>
-              <li>The site can create and watch deposit addresses but holds no keys that can move funds.</li>
+              <li>Deposits sit in a Safe vault that needs two separate keys to move money. The website holds neither.</li>
               <li>Past deals stay listed, including late or failed ones.</li>
             </ul>
           </div>

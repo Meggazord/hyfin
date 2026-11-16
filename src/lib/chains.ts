@@ -54,5 +54,13 @@ export const CHAINS: Chain[] = [
 // Fails loudly at startup if an address above is mistyped (EIP-55 checksum).
 for (const c of CHAINS) for (const t of c.tokens) getAddress(t.address);
 
-export const enabledChains = () => CHAINS.filter((c) => Boolean(process.env[c.rpcEnv]));
+/** Base's free public endpoint, used when the Safe is set and no private RPC is configured. */
+const BASE_PUBLIC_RPC = "https://mainnet.base.org";
+
+export const rpcUrl = (c: Chain): string | undefined =>
+  process.env[c.rpcEnv] || (c.id === 8453 && process.env.DEPOSIT_SAFE_ADDRESS ? BASE_PUBLIC_RPC : undefined);
+
+/** Networks investors may pay on. The Safe lives on Base only, so Safe mode offers Base alone. */
+export const enabledChains = () =>
+  process.env.DEPOSIT_SAFE_ADDRESS ? CHAINS.filter((c) => c.id === 8453) : CHAINS.filter((c) => Boolean(rpcUrl(c)));
 export const chainById = (id: number) => CHAINS.find((c) => c.id === id);

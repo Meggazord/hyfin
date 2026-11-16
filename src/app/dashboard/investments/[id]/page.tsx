@@ -5,13 +5,14 @@ import QRCode from "qrcode";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { chainById, enabledChains } from "@/lib/chains";
+import { depositMode } from "@/lib/wallet";
 import { InvestmentBadge, Loading } from "@/components/ui";
 import { day, pct, shortAddr, usd } from "@/lib/format";
 import type { Deposit, Investment, Project } from "@/lib/types";
 
 async function Content({ params }: PageProps<"/dashboard/investments/[id]">) {
   const { id } = await params;
-  await requireProfile();
+  const me = await requireProfile();
   const supabase = await createClient();
   // Row level security limits this to the signed-in investor's own rows.
   const { data } = await supabase.from("investments").select("*, projects(*), deposits(*)").eq("id", id).maybeSingle();
@@ -21,6 +22,10 @@ async function Content({ params }: PageProps<"/dashboard/investments/[id]">) {
   const outstanding = Math.max(0, Number(inv.committed_amount) - Number(inv.received_amount));
   const canDeposit = p.status === "open" && ["awaiting_deposit", "partially_funded"].includes(inv.status);
   const chains = enabledChains();
+  const pooled = depositMode() === "safe" && inv.expected_amount != null;
+  const firstPayment = Number(inv.received_amount) === 0;
+  // First transfer: the exact tagged amount. Later top-ups are matched by the sending wallet.
+  const toSend = pooled && firstPayment ? Number(inv.expected_amount) : outstanding;
   const qr = inv.deposit_address
     ? await QRCode.toString(inv.deposit_address, { type: "svg", margin: 1, width: 184 })
     : null;
@@ -59,22 +64,45 @@ async function Content({ params }: PageProps<"/dashboard/investments/[id]">) {
       {canDeposit && inv.deposit_address && (
         <section className="sheet mt-6">
           <div className="px-5 py-5">
-            <h2 className="text-xl font-bold tracking-tight">Send {usd(outstanding, 2)} to your deposit address</h2>
-            <p className="mt-1 text-sm text-muted">
-              This address is yours alone for this deal. You can send in more than one transfer.
-            </p>
+            <h2 className="text-xl font-bold tracking-tight">
+              Send exactly {usd(toSend, 2)} USDC{pooled ? " on Base" : ""}
+            </h2>
+            {pooled ? (
+              <p className="mt-1 text-sm text-muted">
+                The cents identify your payment, so send this exact amount in one transfer. It goes to HyFin&apos;s
+                Safe vault, which needs two keys to move money.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-muted">
+                This address is yours alone for this deal. You can send in more than one transfer.
+              </p>
+            )}
           </div>
           <div className="sheet-tear grid gap-6 px-5 py-5 sm:grid-cols-[200px_1fr]">
             {qr && (
               <div
                 className="h-fit w-fit rounded-xl bg-white p-2"
-                aria-label="QR code of your deposit address"
+                aria-label="QR code of the deposit address"
                 dangerouslySetInnerHTML={{ __html: qr }}
               />
             )}
             <div>
               <p className="label">Deposit address</p>
               <p className="select-all break-all rounded-lg border border-line bg-paper px-3 py-2.5 font-semibold text-teal-dark">{inv.deposit_address}</p>
+              <p className="label mt-4">Amount</p>
+              <p className="select-all rounded-lg border border-line bg-paper px-3 py-2.5 font-semibold text-teal-dark">
+                {toSend.toFixed(2)}
+              </p>
+              {pooled && (
+                <>
+                  <p className="label mt-4">Send from your registered wallet</p>
+                  <p className="break-all text-sm">{me.payout_address ?? "None on file"}</p>
+                  <p className="mt-1 text-sm text-muted">
+                    Repayment goes back to this wallet. If you send from an exchange, make sure the amount that
+                    arrives is exactly {toSend.toFixed(2)} after fees, or email us the transaction link.
+                  </p>
+                </>
+              )}
               <p className="label mt-4">Accepted tokens and networks</p>
               {chains.length === 0 ? (
                 <p className="text-sm text-red">Deposits are not switched on yet. Do not send funds.</p>
@@ -88,7 +116,7 @@ async function Content({ params }: PageProps<"/dashboard/investments/[id]">) {
                 </ul>
               )}
               <p className="mt-4 rounded-md bg-amber-soft px-3 py-2 text-sm text-amber">
-                Send only the tokens listed, on the networks listed. Anything else, including Tron (TRC-20) and
+                Send only the tokens listed, on the networks listed. Anything else, including Tron (TRC-20),
                 Solana, cannot be credited and may be lost. Transfers cannot be reversed.
               </p>
             </div>

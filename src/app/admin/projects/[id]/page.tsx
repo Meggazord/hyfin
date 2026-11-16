@@ -120,7 +120,7 @@ async function Content({ params, searchParams }: PageProps<"/admin/projects/[id]
               <th>Investor</th>
               <th>Subscribed</th>
               <th>Received</th>
-              <th>Deposit address</th>
+              <th>Deposit</th>
               <th>Status</th>
               <th>Owed</th>
               <th>Pay to</th>
@@ -153,8 +153,14 @@ async function Content({ params, searchParams }: PageProps<"/admin/projects/[id]
                     {over && <div className="text-xs">More than subscribed</div>}
                   </td>
                   <td className="break-all text-xs">
-                    {r.deposit_address ?? "—"}
-                    <div className="text-muted">index {r.deposit_index}</div>
+                    {r.expected_amount != null ? (
+                      <span className="font-semibold">Pays {usd(r.expected_amount, 2)}</span>
+                    ) : (
+                      <>
+                        {r.deposit_address ?? "—"}
+                        <div className="text-muted">index {r.deposit_index}</div>
+                      </>
+                    )}
                   </td>
                   <td>
                     <InvestmentBadge status={r.status} />

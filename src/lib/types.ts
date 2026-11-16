@@ -56,6 +56,7 @@ export type Investment = {
   received_amount: number;
   deposit_index: number;
   deposit_address: string | null;
+  expected_amount: number | null;
   status: InvestmentStatus;
   payout_amount: number | null;
   payout_tx: string | null;
