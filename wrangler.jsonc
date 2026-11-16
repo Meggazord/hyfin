@@ -13,6 +13,10 @@
   "triggers": { "crons": ["*/5 * * * *"] },
   // Public, non-secret settings. Secrets (SUPABASE_SECRET_KEY, CRON_SECRET) are set in the dashboard.
   "vars": {
+    // TEST ONLY: throwaway public key whose seed was discarded. Nobody can move funds sent to these
+    // addresses. No RPC is set, so the deposit page tells people not to send money.
+    // Replace with the hardware wallet xpub before real deposits.
+    "DEPOSIT_XPUB": "xpub6FCbvuVeffVtUsuYQeiyEVrZYZCrHa72aGdUDmiDLRH6UzfDgCiCfxoVVpwKvcesRa5ahYYt5kmRWJkv46fK2vVci4TCJDdUgxrdFc9cavo",
     "NEXT_PUBLIC_SITE_URL": "https://hyfin.io",
     "NEXT_PUBLIC_SUPABASE_URL": "https://kpsiuvayjzpgjlkylmcc.supabase.co",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtwc2l1dmF5anpwZ2psa3lsbWNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYwNjM1ODQsImV4cCI6MjA3MTYzOTU4NH0.MDcmLvGU6FyFYSn_Y8BcgYomXkF3CtR4Hl-3p-iSFcM"

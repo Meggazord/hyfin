@@ -20,7 +20,9 @@ export type Eligibility = { ok: true } | { ok: false; reason: string; action?: "
 
 export function checkEligibility(p: Profile): Eligibility {
   if (!p.country) return { ok: false, reason: "Add your country of residence to your profile.", action: "profile" };
-  if (blockedCountries().includes(p.country))
+  // Admins may run the investor flow end to end to test it, whatever their country.
+  const isAdmin = p.role === "admin";
+  if (!isAdmin && blockedCountries().includes(p.country))
     return { ok: false, reason: "HyFin deals are not available to residents of your country." };
   if (p.kyc !== "approved")
     return {
@@ -30,7 +32,7 @@ export function checkEligibility(p: Profile): Eligibility {
           ? "Your verification was not approved."
           : "Your account is waiting for identity verification. We will email you when it is approved.",
     };
-  if (accreditedOnlyCountries().includes(p.country) && !p.accredited)
+  if (!isAdmin && accreditedOnlyCountries().includes(p.country) && !p.accredited)
     return { ok: false, reason: "Residents of your country must be verified as accredited investors first." };
   if (!p.payout_address)
     return { ok: false, reason: "Add the wallet address you want to be repaid to.", action: "profile" };
