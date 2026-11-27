@@ -2,7 +2,6 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { isConfigured } from "@/lib/env";
 import type { Profile } from "@/lib/types";
 
@@ -16,18 +15,8 @@ export async function getProfile(): Promise<Profile | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
   const { data } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-  if (data) return data as Profile;
-  // The Supabase project is shared with other apps, so someone can already have
-  // a login there without a HyFin profile. Create it on their first visit.
-  if (!process.env.SUPABASE_SECRET_KEY || !user.email) return null;
-  const { data: created } = await createAdminClient()
-    .from("profiles")
-    .upsert({ id: user.id, email: user.email }, { onConflict: "id", ignoreDuplicates: true })
-    .select("*")
-    .maybeSingle();
-  if (created) return created as Profile;
-  const { data: again } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-  return (again as Profile | null) ?? null;
+  // A shared Supabase login grants access only when a HyFin profile already exists.
+  return (data as Profile | null) ?? null;
 }
 
 export async function requireProfile(): Promise<Profile> {
